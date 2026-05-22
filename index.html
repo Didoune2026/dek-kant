@@ -1,0 +1,732 @@
+<!DOCTYPE html>
+<html lang="fr" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Indicateurs</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700&family=JetBrains+Mono:wght@300;400;600&display=swap" rel="stylesheet">
+<style>
+/* ── TOKENS ─────────────────────────────────────────────────────── */
+:root {
+  --green:  #4caf82;
+  --red:    #e05c5c;
+  --accent: #c8a96e;
+  --adim:   rgba(200,169,110,0.13);
+}
+[data-theme="dark"] {
+  --bg:      #0d0f14; --surface: #14171f; --surface2:#1a1e29;
+  --border:  #1e2330; --blt:     #252b3a;
+  --t1:      #e8eaf0; --t2:      #7a8099; --t3:      #454d66;
+  --overlay: rgba(13,15,20,0.92);
+}
+[data-theme="light"] {
+  --bg:      #f3f4f7; --surface: #ffffff; --surface2:#edf0f5;
+  --border:  #dde1ea; --blt:     #c8cdd8;
+  --t1:      #1a1e29; --t2:      #5a6070; --t3:      #9aa0b4;
+  --overlay: rgba(243,244,247,0.92);
+}
+
+*,*::before,*::after { margin:0; padding:0; box-sizing:border-box; }
+
+body {
+  background:var(--bg); color:var(--t1);
+  font-family:'JetBrains Mono',monospace; font-size:13px;
+  min-height:100vh; transition:background .25s,color .25s;
+}
+
+/* HEADER */
+header {
+  border-bottom:1px solid var(--border);
+  padding:18px 36px;
+  display:flex; justify-content:space-between; align-items:center;
+  position:sticky; top:0; background:var(--bg); z-index:20;
+  gap:16px; flex-wrap:wrap;
+}
+.header-title {
+  font-family:'Playfair Display',serif;
+  font-size:20px; font-weight:400; color:var(--t1);
+}
+.header-title span { color:var(--accent); }
+.header-right { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+#last-update { font-size:10px; color:var(--accent); }
+
+.btn {
+  background:none; border:1px solid var(--blt); color:var(--t2);
+  font-family:'JetBrains Mono',monospace; font-size:11px;
+  padding:5px 12px; cursor:pointer; transition:border-color .2s,color .2s;
+}
+.btn:hover { border-color:var(--accent); color:var(--accent); }
+.btn.icon  { padding:5px 9px; font-size:14px; }
+
+/* MAIN */
+main { padding:28px 36px 60px; max-width:1400px; margin:0 auto; }
+.section { margin-bottom:36px; }
+.section-header {
+  display:flex; align-items:center; gap:12px; margin-bottom:14px;
+}
+.section-label {
+  font-size:9.5px; font-weight:600; letter-spacing:2px;
+  text-transform:uppercase; color:var(--t3); white-space:nowrap;
+}
+.section-line { flex:1; height:1px; background:var(--border); }
+
+/* GRID */
+.grid { display:grid; gap:1px; background:var(--border); border:1px solid var(--border); }
+.grid-4 { grid-template-columns:repeat(4,1fr); }
+.grid-3 { grid-template-columns:repeat(3,1fr); }
+.grid-2 { grid-template-columns:repeat(2,1fr); }
+@media(max-width:960px){ .grid-4,.grid-3{ grid-template-columns:repeat(2,1fr); } main{ padding:18px; } header{ padding:14px 18px; } }
+@media(max-width:500px){ .grid-4,.grid-3,.grid-2{ grid-template-columns:1fr; } }
+
+/* CARD */
+.card {
+  background:var(--surface); padding:16px 20px 14px;
+  min-height:100px; transition:background .25s;
+  position:relative;
+}
+.card.featured { border-left:2px solid var(--accent); }
+.card.hidden   { display:none; }
+
+.card-label {
+  font-size:9px; letter-spacing:1.5px; text-transform:uppercase;
+  color:var(--t3); margin-bottom:10px; line-height:1.4;
+}
+.card-main { display:flex; align-items:baseline; gap:7px; flex-wrap:wrap; margin-bottom:6px; }
+.card-value {
+  font-family:'Playfair Display',serif; font-size:22px;
+  font-weight:700; color:var(--t1); line-height:1;
+}
+.card-value.pending {
+  font-family:'JetBrains Mono',monospace; font-size:13px;
+  color:var(--t3); font-weight:400; font-style:italic;
+}
+.card-delta { font-size:12px; font-weight:600; }
+.card-delta.up      { color:var(--green); }
+.card-delta.down    { color:var(--red); }
+.card-delta.neutral { color:var(--t3); }
+.card-meta   { font-size:10px; color:var(--t3); line-height:1.5; }
+.card-source {
+  font-size:9px; color:var(--t3); opacity:.55;
+  margin-top:8px; border-top:1px solid var(--border); padding-top:6px;
+  display:flex; justify-content:space-between; align-items:center;
+}
+.card-source a { color:inherit; text-decoration:none; }
+.card-source a:hover { color:var(--accent); }
+
+/* Squelettes chargement */
+.skeleton {
+  background:linear-gradient(90deg,var(--border) 25%,var(--blt) 50%,var(--border) 75%);
+  background-size:200% 100%; animation:shimmer 1.4s infinite;
+  border-radius:2px; display:block;
+}
+@keyframes shimmer{ 0%{background-position:200% 0} 100%{background-position:-200% 0} }
+.sk-v { width:120px; height:22px; margin-bottom:8px; }
+.sk-m { width:80px;  height:10px; }
+
+/* Overlay chargement */
+.overlay {
+  position:fixed; inset:0; background:var(--overlay);
+  display:flex; flex-direction:column; align-items:center; justify-content:center;
+  z-index:100; gap:14px;
+}
+.overlay p { color:var(--t2); font-size:11px; letter-spacing:1px; }
+.spinner {
+  width:30px; height:30px; border:2px solid var(--border);
+  border-top-color:var(--accent); border-radius:50%;
+  animation:spin .8s linear infinite;
+}
+@keyframes spin{ to{ transform:rotate(360deg); } }
+
+/* Panneau réglages */
+.sp-bd { position:fixed; inset:0; background:rgba(0,0,0,.4); z-index:199; display:none; }
+.sp-bd.open { display:block; }
+.sp-panel {
+  position:fixed; top:0; right:0; width:300px; height:100vh;
+  background:var(--surface); border-left:1px solid var(--border); z-index:200;
+  display:flex; flex-direction:column;
+  transform:translateX(100%); transition:transform .28s cubic-bezier(.4,0,.2,1);
+}
+.sp-panel.open { transform:translateX(0); }
+.sp-head {
+  display:flex; justify-content:space-between; align-items:center;
+  padding:16px 18px; border-bottom:1px solid var(--border); flex-shrink:0;
+}
+.sp-head h2 { font-family:'Playfair Display',serif; font-size:15px; font-weight:400; color:var(--t1); }
+.sp-body { flex:1; overflow-y:auto; padding:18px; }
+.sp-section { margin-bottom:22px; }
+.sp-title { font-size:9px; letter-spacing:2px; text-transform:uppercase; color:var(--t3); margin-bottom:10px; }
+
+/* Config URL Excel */
+.url-group label { display:block; font-size:9px; letter-spacing:1px; text-transform:uppercase; color:var(--t3); margin-bottom:5px; }
+.url-row { display:flex; gap:6px; margin-bottom:6px; }
+.url-input {
+  flex:1; background:var(--surface2); border:1px solid var(--blt);
+  color:var(--t1); font-family:'JetBrains Mono',monospace; font-size:10px;
+  padding:6px 9px; outline:none; transition:border-color .2s;
+}
+.url-input:focus { border-color:var(--accent); }
+.url-status { font-size:9.5px; color:var(--t3); }
+.url-status.ok  { color:var(--green); }
+.url-status.err { color:var(--red); }
+
+/* Toggle switch */
+.toggle-row {
+  display:flex; justify-content:space-between; align-items:center;
+  padding:7px 0; border-bottom:1px solid var(--border); gap:10px;
+}
+.toggle-row:last-child { border-bottom:none; }
+.tl { font-size:11px; color:var(--t2); line-height:1.3; flex:1; }
+.tl small { display:block; font-size:9px; color:var(--t3); margin-top:1px; }
+.switch { position:relative; width:34px; height:18px; flex-shrink:0; }
+.switch input { opacity:0; width:0; height:0; }
+.sw-sl {
+  position:absolute; inset:0; background:var(--blt); border-radius:18px;
+  cursor:pointer; transition:background .2s;
+}
+.sw-sl::before {
+  content:''; position:absolute; width:12px; height:12px;
+  left:3px; top:3px; background:var(--t3); border-radius:50%;
+  transition:transform .2s,background .2s;
+}
+.switch input:checked + .sw-sl { background:var(--adim); }
+.switch input:checked + .sw-sl::before { transform:translateX(16px); background:var(--accent); }
+
+/* Notice source */
+.notice {
+  margin-top:34px; padding:14px 18px;
+  border:1px solid var(--border); background:var(--surface);
+}
+.notice p { font-size:10px; color:var(--t3); line-height:1.8; }
+.notice strong { color:var(--t2); }
+
+/* Erreur chargement */
+.load-error {
+  margin:40px auto; max-width:600px; padding:24px;
+  border:1px solid var(--red); background:var(--surface);
+  text-align:center;
+}
+.load-error p { font-size:11px; color:var(--t2); line-height:1.8; margin-top:8px; }
+.load-error code { font-size:10px; color:var(--accent); word-break:break-all; }
+
+@media(max-width:480px){ .sp-panel{ width:100vw; } }
+</style>
+</head>
+<body>
+
+<div class="overlay" id="overlay">
+  <div class="spinner"></div>
+  <p id="overlayMsg">Chargement du fichier Excel...</p>
+</div>
+
+<div class="sp-bd"   id="spBd"    onclick="closeSettings()"></div>
+<div class="sp-panel" id="spPanel">
+  <div class="sp-head">
+    <h2>Réglages</h2>
+    <button class="btn icon" onclick="closeSettings()">✕</button>
+  </div>
+  <div class="sp-body">
+
+    <div class="sp-section">
+      <div class="sp-title">Source Excel (GitHub)</div>
+      <div class="url-group">
+        <label>URL du fichier .xlsx (raw GitHub)</label>
+        <div class="url-row">
+          <input type="text" class="url-input" id="urlInput"
+                 placeholder="https://raw.githubusercontent.com/…/indicateurs-mensuel.xlsx">
+          <button class="btn" onclick="saveUrl()">OK</button>
+        </div>
+        <div class="url-status" id="urlStatus">
+          Collez l'URL raw de votre fichier GitHub.
+        </div>
+      </div>
+      <div style="font-size:9px;color:var(--t3);margin-top:8px;line-height:1.7;">
+        Sur GitHub : ouvrez le fichier › bouton "Raw" › copiez l'URL de la barre d'adresse.
+      </div>
+    </div>
+
+    <div class="sp-section">
+      <div class="sp-title">Apparence</div>
+      <div class="toggle-row">
+        <span class="tl">Mode sombre</span>
+        <label class="switch">
+          <input type="checkbox" id="themeToggle" onchange="applyTheme()">
+          <span class="sw-sl"></span>
+        </label>
+      </div>
+    </div>
+
+    <div class="sp-section">
+      <div class="sp-title">Indicateurs affichés</div>
+      <div id="indToggles"></div>
+    </div>
+
+  </div>
+</div>
+
+<header>
+  <div style="display:flex;flex-direction:column;gap:6px;">
+    <a href="https://www.didoune.com" style="font-size:10px;color:var(--t3);text-decoration:none;display:flex;align-items:center;gap:5px;transition:color .2s;" onmouseover="this.style.color='var(--accent)'" onmouseout="this.style.color='var(--t3)'">
+      <span>←</span> Didoune.com
+    </a>
+    <div class="header-title">Tableau de bord <span>indicateurs</span></div>
+  </div>
+  <div class="header-right">
+    <span id="last-update"></span>
+    <button class="btn" id="refreshBtn" onclick="loadDashboard()">Actualiser</button>
+    <button class="btn icon" onclick="openSettings()" title="Réglages">⚙</button>
+  </div>
+</header>
+
+<main id="main">
+  <!-- Contenu généré dynamiquement -->
+</main>
+
+<script>
+// ═══════════════════════════════════════════════════════════════════
+// DÉFINITION DES INDICATEURS (ordre d'affichage + métadonnées)
+// correspond aux lignes Excel de la feuille "Données"
+// ═══════════════════════════════════════════════════════════════════
+const SECTIONS = [
+  {
+    id: "bourse",
+    label: "Marchés boursiers",
+    grid: "grid-4",
+    indicators: [
+      { id:"cac40",     label:"CAC 40",             unit:"points", excelRow:5,  featured:false, source:"Yahoo Finance",     url:"https://finance.yahoo.com/quote/%5EFCHI/",     deltaDir: d=>d>0?"up":d<0?"down":"neutral", fmt: v=>fmtNum(v,0) },
+      { id:"eurostoxx", label:"Euro Stoxx 50",       unit:"points", excelRow:6,  featured:false, source:"Yahoo Finance",     url:"https://finance.yahoo.com/quote/%5ESTOXX50E/",  deltaDir: d=>d>0?"up":d<0?"down":"neutral", fmt: v=>fmtNum(v,0) },
+      { id:"nasdaq",    label:"Nasdaq Composite",    unit:"points", excelRow:7,  featured:false, source:"Yahoo Finance",     url:"https://finance.yahoo.com/quote/%5EIXIC/",      deltaDir: d=>d>0?"up":d<0?"down":"neutral", fmt: v=>fmtNum(v,0) },
+      { id:"dowjones",  label:"Dow Jones",            unit:"points", excelRow:8,  featured:false, source:"Yahoo Finance",     url:"https://finance.yahoo.com/quote/%5EDJI/",       deltaDir: d=>d>0?"up":d<0?"down":"neutral", fmt: v=>fmtNum(v,0) },
+      { id:"vix",       label:"VIX — Volatilité",    unit:"index",  excelRow:9,  featured:false, source:"CBOE",              url:"https://finance.yahoo.com/quote/%5EVIX/",       deltaDir: d=>"neutral",                    fmt: v=>fmtNum(v,2) },
+      { id:"eurusd",    label:"EUR / USD",            unit:"taux",   excelRow:10, featured:false, source:"Yahoo Finance",     url:"https://finance.yahoo.com/quote/EURUSD=X/",     deltaDir: d=>d>0?"up":d<0?"down":"neutral", fmt: v=>fmtNum(v,4) },
+      { id:"oat",       label:"OAT 10 ans",           unit:"%",      excelRow:11, featured:true,  source:"Banque de France",  url:"https://webstat.banque-france.fr/",             deltaDir: d=>d>0?"down":d<0?"up":"neutral", fmt: v=>fmtNum(v,2)+"%" },
+      { id:"brent",     label:"Brent (USD/baril)",    unit:"USD",    excelRow:12, featured:false, source:"ICE",               url:"https://finance.yahoo.com/quote/BZ=F/",         deltaDir: d=>"neutral",                    fmt: v=>fmtNum(v,1)+" $" },
+    ]
+  },
+  {
+    id: "eco",
+    label: "Indicateurs économiques",
+    grid: "grid-4",
+    indicators: [
+      { id:"smic_h",    label:"SMIC horaire brut",    unit:"€",      excelRow:15, featured:false, source:"Min. Travail",      url:"https://www.service-public.fr/particuliers/vosdroits/F2308", deltaDir: d=>"neutral", fmt: v=>fmtNum(v,2)+" €" },
+      { id:"bce",       label:"Taux directeur BCE",   unit:"%",      excelRow:16, featured:true,  source:"BCE",               url:"https://www.ecb.europa.eu/stats/policy_and_exchange_rates/key_ecb_interest_rates/", deltaDir: d=>d<0?"up":d>0?"down":"neutral", fmt: v=>fmtNum(v,2)+"%" },
+      { id:"inflation", label:"Inflation France (IPC)",unit:"%",     excelRow:17, featured:false, source:"INSEE",             url:"https://www.insee.fr/fr/statistiques/serie/001759970",      deltaDir: d=>"neutral", fmt: v=>fmtNum(v,1)+"%" },
+      { id:"chomage",   label:"Chômage France",        unit:"%",     excelRow:18, featured:false, source:"INSEE",             url:"https://www.insee.fr/fr/statistiques/serie/001688526",      deltaDir: d=>d>0?"down":d<0?"up":"neutral", fmt: v=>fmtNum(v,1)+"%" },
+      { id:"navigo",    label:"Pass Navigo mensuel",   unit:"€",     excelRow:19, featured:false, source:"IDF Mobilités",     url:"https://www.iledefrance-mobilites.fr/",                     deltaDir: d=>"neutral", fmt: v=>fmtNum(v,2)+" €" },
+      { id:"baguette",  label:"Baguette — prix moyen", unit:"€",     excelRow:20, featured:false, source:"Fédération Boulangers", url:"https://www.boulangerie.org/",                          deltaDir: d=>"neutral", fmt: v=>fmtNum(v,2)+" €" },
+      { id:"deficit",   label:"Déficit public / PIB",  unit:"% PIB", excelRow:21, featured:false, source:"INSEE / Eurostat",  url:"https://ec.europa.eu/eurostat/databrowser/view/gov_10dd_edpt1/", deltaDir: d=>d>0?"down":d<0?"up":"neutral", fmt: v=>fmtNum(v,1)+"%" },
+      { id:"confiance", label:"Confiance ménages INSEE",unit:"index", excelRow:22, featured:false, source:"INSEE",             url:"https://www.insee.fr/fr/statistiques/serie/001605612",     deltaDir: d=>d>0?"up":d<0?"down":"neutral", fmt: v=>fmtNum(v,0) },
+    ]
+  },
+  {
+    id: "energie",
+    label: "Énergie",
+    grid: "grid-4",
+    indicators: [
+      { id:"smic_m",    label:"SMIC mensuel brut",         unit:"€/mois", excelRow:36, featured:false, source:"Min. Travail (calculé)", url:"https://www.service-public.fr/particuliers/vosdroits/F2308", deltaDir: d=>"neutral", fmt: v=>fmtNum(v,2)+" €" },
+      { id:"edf",       label:"Tarif EDF réglementé",      unit:"€/kWh",  excelRow:37, featured:false, source:"CRE / EDF",             url:"https://www.cre.fr/Electricite/Marche-de-detail/Tarifs-reglementes", deltaDir: d=>d>0?"down":d<0?"up":"neutral", fmt: v=>fmtNum(v,4)+" €" },
+      { id:"gaz",       label:"Gaz naturel — réf. CRE",   unit:"€/MWh",  excelRow:38, featured:false, source:"CRE",                   url:"https://www.cre.fr/Gaz/Marche-de-detail/Observatoire-des-prix",     deltaDir: d=>d>0?"down":d<0?"up":"neutral", fmt: v=>fmtNum(v,1)+" €" },
+      { id:"livreta",   label:"Taux Livret A",             unit:"%",      excelRow:39, featured:true,  source:"Banque de France",      url:"https://www.banque-france.fr/",                                      deltaDir: d=>d>0?"up":d<0?"down":"neutral", fmt: v=>fmtNum(v,2)+"%" },
+    ]
+  },
+  {
+    id: "immo",
+    label: "Immobilier",
+    tag: "publication trimestrielle",
+    grid: "grid-3",
+    indicators: [
+      { id:"icc",       label:"ICC — Coût Construction",   unit:"index",    excelRow:25, featured:true,  source:"INSEE", url:"https://www.insee.fr/fr/statistiques/serie/000868550", deltaDir: d=>"neutral", fmt: v=>fmtNum(v,0) },
+      { id:"ilc",       label:"ILC — Loyers Commerciaux",  unit:"index",    excelRow:26, featured:true,  source:"INSEE", url:"https://www.insee.fr/fr/statistiques/serie/001515769", deltaDir: d=>"neutral", fmt: v=>fmtNum(v,2) },
+      { id:"ilat",      label:"ILAT — Act. Tertiaires",    unit:"index",    excelRow:27, featured:true,  source:"INSEE", url:"https://www.insee.fr/fr/statistiques/serie/001515770", deltaDir: d=>"neutral", fmt: v=>fmtNum(v,2) },
+      { id:"irl",       label:"IRL — Réf. des Loyers",     unit:"index",    excelRow:28, featured:true,  source:"INSEE", url:"https://www.insee.fr/fr/statistiques/serie/001515766", deltaDir: d=>"neutral", fmt: v=>fmtNum(v,2) },
+      { id:"tauxcredit",label:"Taux crédit immo moyen",    unit:"%",        excelRow:29, featured:false, source:"Banque de France", url:"https://webstat.banque-france.fr/",           deltaDir: d=>d<0?"up":d>0?"down":"neutral", fmt: v=>fmtNum(v,2)+"%" },
+      { id:"transact",  label:"Transactions logements",    unit:"milliers", excelRow:30, featured:false, source:"Notaires de France", url:"https://www.notaires.fr/fr/immobilier-succession/prix-et-tendances-de-limmobilier", deltaDir: d=>d>0?"up":d<0?"down":"neutral", fmt: v=>fmtNum(v,0)+" k" },
+    ]
+  }
+];
+
+// Tous les indicateurs à plat
+const ALL_INDS = SECTIONS.flatMap(s => s.indicators);
+
+// ═══════════════════════════════════════════════════════════════════
+// HELPERS
+// ═══════════════════════════════════════════════════════════════════
+function fmtNum(v, dec) {
+  if (v === null || v === undefined || v === "") return "—";
+  return Number(v).toLocaleString("fr-FR", {
+    minimumFractionDigits: dec,
+    maximumFractionDigits: dec
+  });
+}
+
+function signStr(v, dec=2) {
+  if (v === null || v === undefined || v === "" || isNaN(v)) return null;
+  const s = v >= 0 ? "+" : "";
+  return s + Number(v).toLocaleString("fr-FR", {
+    minimumFractionDigits: dec,
+    maximumFractionDigits: dec
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// PERSISTANCE
+// ═══════════════════════════════════════════════════════════════════
+function getUrl()      { return localStorage.getItem("db_xlsx_url") || ""; }
+function getTheme()    { return localStorage.getItem("db_theme") || "light"; }
+function getDisabled() { return JSON.parse(localStorage.getItem("db_disabled") || "[]"); }
+
+function saveUrl() {
+  const v = document.getElementById("urlInput").value.trim();
+  if (!v.startsWith("http")) {
+    setUrlStatus("URL invalide — doit commencer par https://", "err");
+    return;
+  }
+  localStorage.setItem("db_xlsx_url", v);
+  setUrlStatus("URL sauvegardée.", "ok");
+}
+
+function setUrlStatus(msg, cls) {
+  const el = document.getElementById("urlStatus");
+  el.textContent = msg;
+  el.className = "url-status " + (cls || "");
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// THÈME
+// ═══════════════════════════════════════════════════════════════════
+function applyTheme() {
+  const dark = document.getElementById("themeToggle").checked;
+  const theme = dark ? "dark" : "light";
+  document.documentElement.setAttribute("data-theme", theme);
+  localStorage.setItem("db_theme", theme);
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// SETTINGS
+// ═══════════════════════════════════════════════════════════════════
+function openSettings()  {
+  document.getElementById("spPanel").classList.add("open");
+  document.getElementById("spBd").classList.add("open");
+}
+function closeSettings() {
+  document.getElementById("spPanel").classList.remove("open");
+  document.getElementById("spBd").classList.remove("open");
+}
+
+function buildToggles() {
+  const disabled = getDisabled();
+  const c = document.getElementById("indToggles");
+  c.innerHTML = "";
+  SECTIONS.forEach(sec => {
+    const head = document.createElement("div");
+    head.style.cssText = "font-size:9px;letter-spacing:1.5px;text-transform:uppercase;color:var(--t3);margin:12px 0 6px;";
+    head.textContent = sec.label;
+    c.appendChild(head);
+    sec.indicators.forEach(ind => {
+      const on = !disabled.includes(ind.id);
+      const row = document.createElement("div");
+      row.className = "toggle-row";
+      row.innerHTML = `<span class="tl">${ind.label}<small>${ind.unit}</small></span>
+        <label class="switch"><input type="checkbox" ${on?"checked":""} onchange="toggleInd('${ind.id}',this.checked)"><span class="sw-sl"></span></label>`;
+      c.appendChild(row);
+    });
+  });
+}
+
+function toggleInd(id, enabled) {
+  let d = getDisabled();
+  if (enabled) d = d.filter(x => x !== id);
+  else if (!d.includes(id)) d.push(id);
+  localStorage.setItem("db_disabled", JSON.stringify(d));
+  const card = document.getElementById("card-" + id);
+  if (card) card.classList.toggle("hidden", !enabled);
+}
+
+function applyDisabled() {
+  const d = getDisabled();
+  ALL_INDS.forEach(ind => {
+    const card = document.getElementById("card-" + ind.id);
+    if (card) card.classList.toggle("hidden", d.includes(ind.id));
+  });
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// CONSTRUCTION DU DOM
+// ═══════════════════════════════════════════════════════════════════
+function buildDOM() {
+  const main = document.getElementById("main");
+  main.innerHTML = "";
+
+  SECTIONS.forEach(sec => {
+    const section = document.createElement("div");
+    section.className = "section";
+
+    // En-tête section
+    let headerHtml = `<div class="section-header">
+      <span class="section-label">${sec.label}</span>`;
+    if (sec.tag) headerHtml += `<span style="font-size:9px;background:var(--adim);color:var(--accent);padding:1px 7px;white-space:nowrap;">${sec.tag}</span>`;
+    headerHtml += `<div class="section-line"></div></div>`;
+    section.innerHTML = headerHtml;
+
+    // Grille
+    const grid = document.createElement("div");
+    grid.className = "grid " + sec.grid;
+
+    sec.indicators.forEach(ind => {
+      const card = document.createElement("div");
+      card.className = "card" + (ind.featured ? " featured" : "");
+      card.id = "card-" + ind.id;
+      card.innerHTML = `
+        <div class="card-label">${ind.label}</div>
+        <div class="skeleton sk-v"></div>
+        <div class="skeleton sk-m" style="margin-top:8px"></div>`;
+      grid.appendChild(card);
+    });
+
+    section.appendChild(grid);
+    main.appendChild(section);
+  });
+
+  // Notice
+  const notice = document.createElement("div");
+  notice.className = "notice";
+  notice.innerHTML = `<p>
+    <strong>Source :</strong> données issues du fichier Excel mis à jour manuellement en début de mois.
+    Les valeurs affichées sont celles du dernier mois renseigné dans le fichier.
+    La variation entre parenthèses est calculée par rapport au mois précédent renseigné.
+    <strong>Indicateurs trimestriels</strong> (ICC, ILC, ILAT, IRL, chômage) : même valeur répétée sur les 3 mois du trimestre.
+    Pour mettre à jour : modifiez le fichier Excel et poussez-le sur GitHub.
+  </p>`;
+  main.appendChild(notice);
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// LECTURE EXCEL
+// ═══════════════════════════════════════════════════════════════════
+
+// Extraire la dernière valeur non vide d'une ligne et la précédente
+function getLastTwo(ws, rowIdx) {
+  // Colonnes données : C=2 (0-indexed) à BJ=61 (0-indexed)
+  // Dans SheetJS, les lignes sont 0-indexed mais on utilise utils.sheet_to_json
+  // On travaille directement sur les cellules
+
+  const range = XLSX.utils.decode_range(ws["!ref"]);
+  const dataColStart = 2; // C = index 2
+  const dataColEnd   = 61; // BJ = index 61
+
+  let lastVal  = null;
+  let prevVal  = null;
+  let lastDate = null;
+  let count    = 0;
+
+  // row est 0-indexed dans SheetJS
+  const r = rowIdx - 1; // Excel row → 0-indexed
+
+  for (let c = dataColStart; c <= dataColEnd; c++) {
+    const addr = XLSX.utils.encode_cell({ r, c });
+    const cell = ws[addr];
+    if (cell && cell.v !== undefined && cell.v !== null && cell.v !== "") {
+      prevVal  = lastVal;
+      lastVal  = cell.v;
+      // Reconstruire la date depuis la position
+      const yearOffset = Math.floor((c - dataColStart) / 12);
+      const monthIdx   = (c - dataColStart) % 12;
+      const months     = ["jan","fév","mar","avr","mai","jun","jul","aoû","sep","oct","nov","déc"];
+      lastDate = months[monthIdx] + " " + (2022 + yearOffset);
+      count++;
+    }
+  }
+
+  return { lastVal, prevVal, lastDate, count };
+}
+
+async function fetchExcel(url) {
+  // Utilise un proxy CORS pour contourner les restrictions navigateur sur GitHub raw
+  const proxyUrl = "https://api.allorigins.win/get?url=" + encodeURIComponent(url);
+  const res = await fetch(proxyUrl);
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const json = await res.json();
+
+  // allorigins renvoie le contenu en base64 pour les fichiers binaires
+  // On force le mode base64
+  const b64url = "https://api.allorigins.win/get?url=" + encodeURIComponent(url) + "&charset=base64";
+  const res2 = await fetch(b64url);
+  const j2   = await res2.json();
+
+  // Tenter le parsing direct du contenu
+  let workbook;
+  try {
+    // Essai 1 : contenu binaire via ArrayBuffer
+    const res3   = await fetch(proxyUrl);
+    const j3     = await res3.json();
+    const content = j3.contents;
+
+    // Si c'est du base64
+    if (/^[A-Za-z0-9+/=\n]+$/.test(content.substring(0, 100))) {
+      workbook = XLSX.read(content, { type: "base64" });
+    } else {
+      workbook = XLSX.read(content, { type: "binary" });
+    }
+  } catch(e) {
+    throw new Error("Impossible de parser le fichier Excel. Vérifiez l'URL.");
+  }
+  return workbook;
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// RENDU CARTE
+// ═══════════════════════════════════════════════════════════════════
+function renderCard(ind, data) {
+  const card = document.getElementById("card-" + ind.id);
+  if (!card) return;
+
+  const label = `<div class="card-label">${ind.label}</div>`;
+
+  if (!data || data.lastVal === null) {
+    // En attente de saisie
+    card.innerHTML = label +
+      `<div class="card-main">
+         <span class="card-value pending">en attente de saisie</span>
+       </div>
+       <div class="card-meta" style="color:var(--t3);">mettre à jour le fichier Excel</div>
+       <div class="card-source"><a href="${ind.url}" target="_blank" rel="noopener">${ind.source}</a></div>`;
+    return;
+  }
+
+  const { lastVal, prevVal, lastDate } = data;
+  const diff  = (prevVal !== null) ? lastVal - prevVal : null;
+  const dir   = (diff !== null) ? ind.deltaDir(diff) : "neutral";
+  const dStr  = (diff !== null) ? signStr(diff, Math.abs(diff) < 1 ? 3 : 1) : null;
+  const deltaHtml = dStr ? `<span class="card-delta ${dir}">(${dStr})</span>` : "";
+
+  card.innerHTML = label +
+    `<div class="card-main">
+       <span class="card-value">${ind.fmt(lastVal)}</span>${deltaHtml}
+     </div>` +
+    (lastDate ? `<div class="card-meta">${lastDate} · vs mois précédent</div>` : "") +
+    `<div class="card-source"><a href="${ind.url}" target="_blank" rel="noopener">${ind.source}</a></div>`;
+}
+
+function renderError(message) {
+  const main = document.getElementById("main");
+  // Garder les cards mais afficher une bannière d'erreur en haut
+  const err = document.createElement("div");
+  err.className = "load-error";
+  err.innerHTML = `
+    <div style="font-size:12px;color:var(--red);font-weight:600;margin-bottom:8px;">Impossible de charger le fichier Excel</div>
+    <p>${message}</p>
+    <p style="margin-top:10px;">Ouvrez les <strong>Réglages ⚙</strong> et vérifiez l'URL raw GitHub du fichier.<br>
+    Elle doit ressembler à :<br>
+    <code>https://raw.githubusercontent.com/votre-compte/votre-repo/main/indicateurs-mensuel.xlsx</code></p>`;
+  main.prepend(err);
+
+  // Toutes les cards en "en attente"
+  ALL_INDS.forEach(ind => renderCard(ind, null));
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// CHARGEMENT PRINCIPAL
+// ═══════════════════════════════════════════════════════════════════
+async function loadDashboard() {
+  const btn = document.getElementById("refreshBtn");
+  const overlay = document.getElementById("overlay");
+  btn.disabled = true;
+  overlay.style.display = "flex";
+  document.getElementById("overlayMsg").textContent = "Chargement du fichier Excel...";
+
+  // Reset squelettes
+  ALL_INDS.forEach(ind => {
+    const card = document.getElementById("card-" + ind.id);
+    if (!card) return;
+    card.innerHTML = `<div class="card-label">${ind.label}</div>
+      <div class="skeleton sk-v"></div>
+      <div class="skeleton sk-m" style="margin-top:8px"></div>`;
+  });
+
+  const url = getUrl();
+
+  if (!url) {
+    overlay.style.display = "none";
+    // Enlever l'erreur existante si elle existe
+    const existing = document.querySelector(".load-error");
+    if (existing) existing.remove();
+
+    const main = document.getElementById("main");
+    const msg = document.createElement("div");
+    msg.className = "load-error";
+    msg.innerHTML = `
+      <div style="font-size:12px;color:var(--accent);font-weight:600;margin-bottom:8px;">Configuration requise</div>
+      <p>Aucune source Excel configurée.<br>
+      Cliquez sur <strong>⚙ Réglages</strong> et collez l'URL raw GitHub de votre fichier <code>indicateurs-mensuel.xlsx</code>.</p>`;
+    main.prepend(msg);
+    ALL_INDS.forEach(ind => renderCard(ind, null));
+    btn.disabled = false;
+    return;
+  }
+
+  try {
+    const wb = await fetchExcel(url);
+    const wsName = wb.SheetNames.includes("Données") ? "Données" : wb.SheetNames[0];
+    const ws = wb.Sheets[wsName];
+
+    if (!ws) throw new Error(`Feuille "Données" introuvable dans le fichier.`);
+
+    overlay.style.display = "none";
+
+    // Supprimer la bannière d'erreur si elle existe
+    const existing = document.querySelector(".load-error");
+    if (existing) existing.remove();
+
+    // Lire et afficher chaque indicateur
+    ALL_INDS.forEach(ind => {
+      const data = getLastTwo(ws, ind.excelRow);
+      renderCard(ind, data);
+    });
+
+    // Timestamp
+    const now = new Date();
+    document.getElementById("last-update").textContent =
+      "Mis à jour : " +
+      now.toLocaleDateString("fr-FR", { day:"2-digit", month:"2-digit", year:"numeric" }) +
+      " " +
+      now.toLocaleTimeString("fr-FR", { hour:"2-digit", minute:"2-digit" });
+
+    // Sauvegarder le statut URL
+    setUrlStatus("Fichier chargé avec succès.", "ok");
+
+  } catch(e) {
+    overlay.style.display = "none";
+    console.error("Erreur chargement Excel:", e);
+    const existing = document.querySelector(".load-error");
+    if (existing) existing.remove();
+    renderError(e.message);
+  }
+
+  applyDisabled();
+  btn.disabled = false;
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════════════════════════════════
+window.addEventListener("DOMContentLoaded", () => {
+  // Thème
+  const theme = getTheme();
+  document.documentElement.setAttribute("data-theme", theme);
+  document.getElementById("themeToggle").checked = (theme === "dark");
+
+  // URL dans le champ
+  const url = getUrl();
+  if (url) {
+    document.getElementById("urlInput").value = url;
+    setUrlStatus("URL chargée depuis le navigateur.", "ok");
+  }
+
+  // Construction DOM
+  buildDOM();
+  buildToggles();
+  loadDashboard();
+});
+</script>
+</body>
+</html>
